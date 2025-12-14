@@ -129,7 +129,7 @@ public class PetApiTest extends BaseTest {
                 .when()
                 .post("/pet")
                 .then()
-                .statusCode(200); //api НЕ валидирует обязательные поля поэтому статус-код 200
+                .statusCode(200); //API does not validate required fields
     }
 
 }
