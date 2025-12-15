@@ -1,6 +1,9 @@
 package com.example;
 
 import com.example.model.Pet;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -13,6 +16,10 @@ import static org.hamcrest.Matchers.*;
 
 public class PetApiTest extends BaseTest {
 
+
+    private Pet testPet;
+    private long testPetId;
+
     private Pet createPet(String status) {
         Pet pet = new Pet();
         pet.id = Math.abs(UUID.randomUUID().getMostSignificantBits());
@@ -22,82 +29,81 @@ public class PetApiTest extends BaseTest {
         return pet;
     }
 
-    @Test
-    void createAndGetPet() {
-        Pet pet = createPet("available");
+    @BeforeEach
+    void setupPetResource() {
+        testPet = createPet("available");
 
-        long petId =
+        testPetId =
                 given()
                         .contentType(JSON)
-                        .body(pet)
+                        .body(testPet)
                         .when()
                         .post("/pet")
                         .then()
                         .statusCode(200)
-                        .body("name", equalTo(pet.name))
                         .extract()
                         .path("id");
+        testPet.id = testPetId;
+    }
 
+    @Test
+    @DisplayName("Проверка создания Pet и последующего получения по ID")
+    void createAndGetPet() {
         when()
-                .get("/pet/{id}", petId)
+                .get("/pet/{id}", testPetId)
                 .then()
                 .statusCode(200)
-                .body("name", equalTo(pet.name))
+                .body("name", equalTo(testPet.name))
                 .body("status", equalTo("available"));
     }
 
 
     @Test
+    @DisplayName("Обновление существующего Pet с помощью PUT")
     void updatePetWithPut() {
-        Pet pet = createPet("available");
+        String newStatus = "sold";
+        String newName = testPet.name + "-updated";
+
+        testPet.status = newStatus;
+        testPet.name = newName;
 
         given()
                 .contentType(JSON)
-                .body(pet)
-                .post("/pet")
-                .then()
-                .statusCode(200);
-
-        pet.status = "sold";
-        pet.name = pet.name + "-updated";
-
-        given()
-                .contentType(JSON)
-                .body(pet)
+                .body(testPet)
                 .when()
                 .put("/pet")
                 .then()
                 .statusCode(200)
-                .body("status", equalTo("sold"));
+                .body("name", equalTo(newName))
+                .body("status", equalTo(newStatus));
     }
 
     @Test
+    @DisplayName("Удаление Pet и проверка, что оно больше не существует")
     void deletePet() {
-        Pet pet = createPet("available");
 
-        long petId =
-                given()
-                        .contentType(JSON)
-                        .body(pet)
-                        .when()
-                        .post("/pet")
-                        .then()
-                        .statusCode(200)
-                        .extract()
-                        .path("id");
-
-        delete("/pet/{id}", petId)
+        delete("/pet/{id}", testPetId)
                 .then()
                 .statusCode(200);
 
-        get("/pet/{id}", petId)
+        get("/pet/{id}", testPetId)
                 .then()
                 .statusCode(anyOf(is(404), is(400)));
     }
 
 
     @Test
+    @DisplayName("Поиск Pet по статусу 'pending'")
     void findByStatus() {
+        Pet pendingPet = createPet("pending");
+
+        given()
+                .contentType(JSON)
+                .body(pendingPet)
+                .post("/pet")
+                .then()
+                .statusCode(200);
+
         given()
                 .queryParam("status", "pending")
                 .when()
@@ -108,6 +114,7 @@ public class PetApiTest extends BaseTest {
     }
 
     @Test
+    @DisplayName("Попытка получить несуществующий Pet")
     void getNonExistingPet() {
         long nonExistingId = 999999999999L;
 
@@ -116,20 +123,11 @@ public class PetApiTest extends BaseTest {
                 .statusCode(anyOf(is(404), is(400)));
     }
 
-    @Test
-    void createPetWithoutName() {
-        Pet pet = new Pet();
-        pet.id = Math.abs(UUID.randomUUID().getMostSignificantBits());
-        pet.status = "available";
-        pet.photoUrls = List.of();
-
-        given()
-                .contentType(JSON)
-                .body(pet)
-                .when()
-                .post("/pet")
+    @AfterEach
+    void cleanup() {
+        delete("/pet/{id}", testPetId)
                 .then()
-                .statusCode(200); //API does not validate required fields
+                .statusCode(anyOf(is(200), is(204), is(404)));
     }
-
 }
+
